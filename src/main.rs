@@ -11,7 +11,7 @@ use bytemuck::{cast_slice, cast_ref};
 use hound::{WavWriter, Error};
 
 // extern crate openmpt;
-use openmpt::module::{Module, Logger};
+use openmpt::module::{ctls, Module, Logger};
 
 use std::fs::File;
 use std::io::BufReader;
@@ -27,7 +27,8 @@ async fn main() {
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     // Load a sound from a file, using a path relative to Cargo.toml
     // let file = BufReader::new(File::open("examples/insidecol1.ogg").unwrap());
-    let wav_xm = renderXM();
+    // let wav_xm = renderXM();
+    let wav_xm = render_open_mpt();
     // println!("Buffer {:?}", wav_xm);
     // let file_wav_xm = BufReader::new();
     // let cursor = Cursor::new(&wav_xm[..]);
@@ -88,6 +89,14 @@ async fn task_that_takes_a_second(i: i32) {
     // time::sleep(time::Duration::from_secs(1)).await
 }
 
+fn render_open_mpt() -> Cursor<Vec<u8>> {
+    // let wavbuffer = openmpt_render_to_buffer("");
+    // let cursorbuffer = Cursor::new(wavbuffer);
+    // return cursorbuffer;
+    // return openmpt_render_to_buffer("examples/01_space_light.it");
+    return openmpt_render_to_buffer("examples/slash - a fair warning.it");
+}
+
 fn renderXM() -> Cursor<Vec<u8>> {
     // Read the contents of the module into `data`
     let mut data = Vec::new();
@@ -116,32 +125,42 @@ fn renderXM() -> Cursor<Vec<u8>> {
     // The song has looped once.
 }
 
-fn render_file_to_wav(file_path : &str) {
-	// let mut stream = File::open(file_path).expect("unable to open file");
+fn openmpt_render_to_buffer(file_path : &str) -> Cursor<Vec<u8>> {
+	let mut stream = File::open(file_path).expect("unable to open file");
 
-	// let mut module = Module::create(&mut stream, Logger::None, &[]).unwrap();
+    let init_ctls = [ctls::Ctl::PlaybackTempoFactor(1.5), ctls::Ctl::PlaybackPitchFactor(0.8)];
+    // init_ctls[0].set(ctls::CtlParam::StereoSeparation, 2.0);
+    // init_ctls[1].set(ctls::Ctl::PlaybackTempoFactor(1.5), 44100.0);
 
-	// let spec = hound::WavSpec {
-	// 	channels: 2,
-	// 	sample_rate: 44100,
-	// 	bits_per_sample: 32, // c_float is equivalent to f32
-	// 	sample_format: hound::SampleFormat::Float,
-	// };
+	let mut module = Module::create(&mut stream, Logger::StdErr, &init_ctls).unwrap();
+	// let mut module = Module::create(&mut stream, Logger::StdErr, &[]).unwrap();
 
-	// let out_file = String::from(file_path) + ".wav";
+	let spec = hound::WavSpec {
+		channels: 2,
+		sample_rate: 44100,
+		bits_per_sample: 32, // c_float is equivalent to f32
+		sample_format: hound::SampleFormat::Float,
+	};
+
+	let out_file = String::from(file_path) + ".wav";
 	
 	// let mut writer = hound::WavWriter::create(out_file, spec).unwrap();
-	// let mut buffer = vec![0f32; 44100]; // 1 second at a time
+	let mut buffer = vec![0f32; 48000]; // 1 second at a time
+    let mut buffer2 = Vec::new();
+    let mut buffercup = Cursor::new(buffer2); // 1 second at a time
+    let mut writer = hound::WavWriter::new(&mut buffercup, spec).unwrap();
+    
+	loop {
+		let avail_samples = module.read_interleaved_float_stereo(
+				48000, &mut buffer) << 1; // We're in interleaved stereo
+		if avail_samples <= 0 { break; }
 
-	// loop {
-	// 	let avail_samples = module.read_interleaved_float_stereo(
-	// 			44100, &mut buffer) << 1; // We're in interleaved stereo
-	// 	if avail_samples <= 0 { break; }
-
-	// 	for sample in &buffer[..avail_samples] {
-	// 		writer.write_sample(*sample);
-	// 	}
-	// }
+		for sample in &buffer[..avail_samples] {
+			writer.write_sample(*sample);
+		}
+	}
+    writer.finalize();
+    return buffercup;
 }
 
 fn write_f32_vector_to_file(filename: &str, data: &Vec<f32>) -> std::io::Result<()> {
