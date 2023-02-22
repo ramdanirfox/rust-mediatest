@@ -21,6 +21,42 @@ use tokio::time;
 
 #[tokio::main]
 async fn main() {
+    // main1().await;
+    main2().await;
+}
+
+async fn main2() {
+ // Load the module
+//  let module = Module::from_file("mymodule.mod").unwrap();
+    let file_path = "examples/slash - a fair warning.it";
+    let mut stream = File::open(file_path).expect("unable to open file");
+    let mut module = Module::create(&mut stream, Logger::StdErr, &[]).unwrap();
+
+ // Set up the output sink
+//  let device = rodio::default_output_device().unwrap();
+let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+//  let sink = Sink::new(&device);
+let sink = Sink::try_new(&stream_handle).unwrap();
+
+ // Set up the buffer
+//  let mut buffer = [0f32; 4096];
+ let mut buffer = vec![0f32; 96000]; // 1 sec, but because it interleaved stereo multiply by two
+
+ loop {
+     let mut cursor = Cursor::new(&mut buffer[..]);
+    //  let count = module.read_interleaved_float_stereo(48000, &mut cursor);
+     let count = module.read_interleaved_float_stereo(48000, &mut buffer);
+     if count == 0 {
+         break;
+     }
+     let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+     sink.append(source);
+    //  std::thread::sleep(Duration::from_secs(1));
+        time::sleep(time::Duration::from_millis(1000)).await
+ }
+}
+
+async fn main1() {
     println!("Hello, world!");
 
     // Get a output stream handle to the default physical sound device
