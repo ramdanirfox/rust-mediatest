@@ -2,6 +2,8 @@
 #![cfg_attr(test, allow(unused_must_use))]
 
 use libxm::{XMContext};
+use std::ffi::CStr;
+use std::ffi::c_void;
 use std::io::Read;
 use std::io::Cursor;
 use std::io::Seek;
@@ -11,7 +13,8 @@ use bytemuck::{cast_slice, cast_ref};
 use hound::{WavWriter, Error};
 
 // extern crate openmpt;
-use openmpt::module::{ctls, Module, Logger};
+use openmpt::module::{ctls, Module, Logger, render};
+use openmpt_sys::*;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -23,6 +26,25 @@ use tokio::time;
 async fn main() {
     // main1().await;
     main2().await;
+}
+
+async fn main3() {
+    // unsafe {
+    //     let mod_file = openmpt_module_create_from_memory(
+    //         include_bytes!("../examples/slash - a fair warning.it").as_ptr() as *const c_void, 
+    //         include_bytes!("../examples/slash - a fair warning.it").len(),
+    //         ptr::null_mut(),
+    //         ptr::null_mut(), 
+    //         ptr::null_mut()) as *mut openmpt_module;
+    //     let mut metadata = openmpt_module_ctl_get_metadata(mod_file);
+    //     while !metadata.is_null() {
+    //         let name = CStr::from_ptr((*metadata).name).to_str().unwrap();
+    //         let description = CStr::from_ptr((*metadata).description).to_str().unwrap();
+    //         println!("{}: {}", name, description);
+    //         metadata = metadata.offset(1);
+    //     }
+    //     openmpt_module_destroy(mod_file);
+    // }
 }
 
 async fn main2() {
@@ -40,20 +62,91 @@ let sink = Sink::try_new(&stream_handle).unwrap();
 
  // Set up the buffer
 //  let mut buffer = [0f32; 4096];
- let mut buffer = vec![0f32; 96000]; // 1 sec, but because it interleaved stereo multiply by two
+//  let mut buffer = vec![0f32; 96000*2]; // 1 sec, but because it interleaved stereo multiply by two
+
+// ATTEMPT 3
+
+let mut buffer = vec![0f32; 48000/1];
+let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
+let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+sink.append(source);
+let mut counter = 0.0;
+println!("controls : {}", module.get_ctls());
 
  loop {
-     let mut cursor = Cursor::new(&mut buffer[..]);
-    //  let count = module.read_interleaved_float_stereo(48000, &mut cursor);
-     let count = module.read_interleaved_float_stereo(48000, &mut buffer);
-     if count == 0 {
-         break;
-     }
-     let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
-     sink.append(source);
+    println!("sink health {}", sink.len());
+    // module.ctl_set_play_tempo_factor(1.0 + counter/10.0);
+    module.ctl_set_play_pitch_factor(1.0 + counter/100.0);
+    // module.ctl_set(key, val);
+    counter += 1.0;
+    loop {
+        if sink.len() < 2 && count != 0 {
+            let mut buffer = vec![0f32; 48000/1];
+            let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
+            let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+            sink.append(source);
+        }
+        else {
+            break;
+        }
+    }
+    let mut buffer = vec![0f32; 48000/1];
+    let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
+    let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+    sink.append(source);
+    if count == 0 {
+        break;
+    }
+    
+    let pos_sec = module.get_position_seconds();
+    //  sink.sleep_until_end();
     //  std::thread::sleep(Duration::from_secs(1));
-        time::sleep(time::Duration::from_millis(1000)).await
+    time::sleep(time::Duration::from_millis(1000/2)).await
  }
+
+// ATTEMPT 2
+
+// let mut buffer_all = vec![0f32; 0];
+// loop { 
+//     let mut buffer = vec![0f32; 96000];
+//     let count = module.read_interleaved_float_stereo(48000, &mut buffer);
+//     let mut newbuffer = Vec::with_capacity(buffer_all.len() + buffer.len());
+//     newbuffer.extend_from_slice(&buffer_all);
+//     newbuffer.extend_from_slice(&buffer);
+//     buffer_all = newbuffer;
+//     if count == 0 {
+//         println!("sec openmpt {}", module.get_position_seconds());
+//         println!("buffer len {}", buffer_all.len());
+//         break;
+//     }
+// }
+
+// module.set_position_seconds(0.0);
+// let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer_all[..(buffer_all.len()/2)]);
+// sink.append(source);
+// sink.sleep_until_end();
+
+// ATTEMPT 1 
+
+//  loop {
+//     let mut buffer = vec![0f32; 48000/1];
+//      let mut cursor = Cursor::new(&mut buffer[..]);
+//     //  let count = module.read_interleaved_float_stereo(48000, &mut cursor);
+//      let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
+//      if count == 0 {
+//          break;
+//      }
+//      let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+     
+//      sink.append(source);
+//      let pos_sec = module.get_position_seconds();
+//      println!("frame openmpt {}", pos_sec);
+//     //  module.set_position_seconds(pos_sec - 0.5);
+//      sink.sleep_until_end();
+//     //  std::thread::sleep(Duration::from_secs(1));
+//         // time::sleep(time::Duration::from_millis(1000/2)).await
+//  }
+//  sink.sleep_until_end();
 }
 
 async fn main1() {
@@ -164,7 +257,8 @@ fn renderXM() -> Cursor<Vec<u8>> {
 fn openmpt_render_to_buffer(file_path : &str) -> Cursor<Vec<u8>> {
 	let mut stream = File::open(file_path).expect("unable to open file");
 
-    let init_ctls = [ctls::Ctl::PlaybackTempoFactor(1.5), ctls::Ctl::PlaybackPitchFactor(0.8)];
+    let init_ctls = [];
+    // let init_ctls = [ctls::Ctl::PlaybackTempoFactor(1.5), ctls::Ctl::PlaybackPitchFactor(0.8)];
     // init_ctls[0].set(ctls::CtlParam::StereoSeparation, 2.0);
     // init_ctls[1].set(ctls::Ctl::PlaybackTempoFactor(1.5), 44100.0);
 

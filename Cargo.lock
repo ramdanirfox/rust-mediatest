@@ -751,6 +751,7 @@ dependencies = [
  "hound",
  "libxm",
  "openmpt",
+ "openmpt-sys",
  "regex 0.1.80",
  "rodio",
  "time",
