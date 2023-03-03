@@ -18,3 +18,7 @@ openmpt-sys = "0.1.0"
 
 [dev-dependencies]
 
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
