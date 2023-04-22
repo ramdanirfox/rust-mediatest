@@ -2,6 +2,9 @@
 #![cfg_attr(test, allow(unused_must_use))]
 
 use libxm::{XMContext};
+use rust_research::liopenmpt_ext_interactive2;
+use rust_research::mptffi2;
+// use rust_research::openmpt_ffi;
 use std::ffi::CStr;
 use std::ffi::c_void;
 use std::io::Read;
@@ -21,6 +24,7 @@ use std::io::BufReader;
 use rodio::{Decoder, OutputStream, Sink, source::Source};
 
 use tokio::time;
+
 
 #[tokio::main]
 async fn main() {
@@ -50,7 +54,8 @@ async fn main3() {
 async fn main2() {
  // Load the module
 //  let module = Module::from_file("mymodule.mod").unwrap();
-    let file_path = "examples/slash - a fair warning.it";
+    // let file_path = "examples/slash - a fair warning.it";
+    let file_path = "examples/expr.it";
     let mut stream = File::open(file_path).expect("unable to open file");
     let mut module = Module::create(&mut stream, Logger::StdErr, &[]).unwrap();
 
@@ -64,24 +69,27 @@ let sink = Sink::try_new(&stream_handle).unwrap();
 //  let mut buffer = [0f32; 4096];
 //  let mut buffer = vec![0f32; 96000*2]; // 1 sec, but because it interleaved stereo multiply by two
 
+// openmpt_ffi::process();
+mptffi2::proses();
 // ATTEMPT 3
+let bufferSize = 5000;
 
-let mut buffer = vec![0f32; 48000/1];
+let mut buffer = vec![0f32; bufferSize/1];
 let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
 let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
 sink.append(source);
 let mut counter = 0.0;
 println!("controls : {}", module.get_ctls());
-
+// module.ctl_set_play_tempo_factor(0.8);
  loop {
-    println!("sink health {}", sink.len());
+    // println!("sink health {} - {}s", sink.len(), module.get_position_seconds());
     // module.ctl_set_play_tempo_factor(1.0 + counter/10.0);
-    module.ctl_set_play_pitch_factor(1.0 + counter/100.0);
+    module.ctl_set_play_pitch_factor(1.0 + counter/1000.0);
     // module.ctl_set(key, val);
     counter += 1.0;
     loop {
         if sink.len() < 2 && count != 0 {
-            let mut buffer = vec![0f32; 48000/1];
+            let mut buffer = vec![0f32; bufferSize/1];
             let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
             let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
             sink.append(source);
@@ -90,7 +98,7 @@ println!("controls : {}", module.get_ctls());
             break;
         }
     }
-    let mut buffer = vec![0f32; 48000/1];
+    let mut buffer = vec![0f32; bufferSize/1];
     let count = module.read_interleaved_float_stereo(48000, &mut buffer) << 1;
     let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
     sink.append(source);
@@ -101,7 +109,7 @@ println!("controls : {}", module.get_ctls());
     let pos_sec = module.get_position_seconds();
     //  sink.sleep_until_end();
     //  std::thread::sleep(Duration::from_secs(1));
-    time::sleep(time::Duration::from_millis(1000/2)).await
+    time::sleep(time::Duration::from_millis((bufferSize/(2*48)).try_into().unwrap())).await
  }
 
 // ATTEMPT 2

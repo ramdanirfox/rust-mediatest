@@ -2,6 +2,7 @@
 name = "rust-research"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,6 +16,6 @@ libxm = "1.0.0"
 bytemuck = "1.13.0"
 hound = "3.1.0"
 openmpt-sys = "0.1.0"
+libc = "0.2"
 
 [dev-dependencies]
-
