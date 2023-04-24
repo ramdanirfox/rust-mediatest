@@ -1,4 +1,4 @@
-use std::{os::raw::{c_char, c_void, c_float}, ptr, ffi::CString};
+use std::{os::raw::{c_char, c_void, c_float}, ptr, ffi::{CString, c_schar}};
 use openmpt::module::Logger;
 use openmpt_sys::{openmpt_module_initial_ctl, openmpt_module};
 
@@ -10,7 +10,7 @@ const LIBPATH: &str = "lib/dll/libopenmpt.dll";
 pub struct OpenMptModuleExtInterfaceInteractive {
   // pub set_current_speed: extern "C" fn(*mut openmpt_module_ext, i32) -> i32,
   // pub set_current_tempo: extern "C" fn(*mut openmpt_module_ext, i32) -> i32,
-  // pub set_tempo_factor: extern "C" fn(*mut openmpt_module_ext, f64) -> i32,
+  // pub set_tempo_factor: extern "C"  fn(*mut openmpt_module_ext, f64) -> i32,
   // pub get_tempo_factor: extern "C" fn(*mut openmpt_module_ext) -> f64,
   // pub set_pitch_factor: extern "C" fn(*mut openmpt_module_ext, f64) -> i32,
   // pub get_pitch_factor: extern "C" fn(*mut openmpt_module_ext) -> f64,
@@ -99,7 +99,7 @@ pub fn libopenmpt_module_ext_create_from_memory(
 
 fn libopenmpt_module_ext_get_interface(
     module_ext: *mut openmpt_module,
-    interface_id: &[u8],
+    interface_id: *const ::std::os::raw::c_char,
     interface: *mut c_void,
     interface_size: usize
 ) -> Result<::std::os::raw::c_int, Box<dyn std::error::Error>> {
@@ -107,7 +107,7 @@ fn libopenmpt_module_ext_get_interface(
         let lib = libloading::Library::new(LIBPATH)?;
         let func: libloading::Symbol<unsafe extern fn(
             module_ext: *mut openmpt_module,
-            interface_id: &[u8],
+            interface_id: *const ::std::os::raw::c_char,
             interface: *mut c_void,
             interface_size: usize,
           ) -> ::std::os::raw::c_int> = lib.get(b"openmpt_module_ext_get_interface")?;
@@ -142,7 +142,8 @@ pub fn initialize() {
       }
 
       // obtain a valid openmpt_module_ext pointer and interface_id 
-        let interface_id = CString::new("interactive").unwrap();
+      let interface_id_bind = CString::new("interactive").unwrap();
+        let interface_id = interface_id_bind.as_ptr();
 
         // define the interface struct and its size
         let mut interface: OpenMptModuleExtInterfaceInteractive = OpenMptModuleExtInterfaceInteractive {
@@ -169,16 +170,17 @@ pub fn initialize() {
         let result = unsafe {
         libopenmpt_module_ext_get_interface(
                 module_ptr,
-                interface_id.as_bytes(),
+                interface_id,
                 &mut interface as *mut OpenMptModuleExtInterfaceInteractive as *mut c_void,
                 interface_size
             )
         }.unwrap();
-        if result != 0 {
-            panic!("Failed to get interface");
-        }
+        // if result != 0 {
+        //     panic!("Failed to get interface");
+        // }
 
         println!("interface_size : {}", interface_size);
+        println!("interface_id : {:?}", interface_id_bind);
 
         println!("Hasil getInterface (1=success, 0=interface not found) : {}", result);
 

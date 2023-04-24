@@ -197,7 +197,8 @@ pub fn proses() {
   // }
 
   // obtain a valid openmpt_module_ext pointer and interface_id 
-  let interface_id = CString::new("interactive").unwrap().as_ptr();
+  let interface_id_bind = CString::new("interactive").unwrap();
+  let interface_id = interface_id_bind.as_ptr();
 
   // define the interface struct and its size
   let mut interface: OpenMptModuleExtInterfaceInteractive = OpenMptModuleExtInterfaceInteractive {
@@ -236,7 +237,7 @@ pub fn proses() {
   println!("Hasil getInterface (1=success, 0=interface not found) : {}", result);
   println!("hasil out : {:?}", interface.stop_note);
   println!("interface size : {:?}", interface_size);
-  println!("interface id : {:?}", CString::new("interactive").unwrap());
+  println!("interface id : {:?}", interface_id_bind);
 
 
 
