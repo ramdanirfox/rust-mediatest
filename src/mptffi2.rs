@@ -10,6 +10,7 @@ use openmpt_sys::{
   openmpt_free_string, 
   openmpt_module_initial_ctl, openmpt_log_func
 };
+use rodio::{OutputStream, Sink};
 
 
 type OpenMPTModule = *mut openmpt_module;
@@ -49,8 +50,8 @@ pub struct OpenMptModuleExtInterfaceInteractive {
   get_global_volume: Option<i32>,
   set_channel_volume: Option<i32>,
   get_channel_volume: Option<i32>,
-  set_channel_mute_status: Option<i32>,
-  get_channel_mute_status: Option<i32>,
+  set_channel_mute_status: Option<unsafe extern "C" fn(*mut openmpt_module, i32, i32) -> i32>,
+  get_channel_mute_status: Option<unsafe extern "C" fn(*mut openmpt_module, i32) -> i32>,
   set_instrument_mute_status: Option<i32>,
   get_instrument_mute_status: Option<i32>,
   play_note: Option<i32>,
@@ -126,7 +127,7 @@ extern "C" {
     fn openmpt_get_supported_extensions() -> *const ::std::os::raw::c_char;
 }
 
-pub fn proses() {
+pub async fn proses() {
   // Load module from memory
   let module_data = include_bytes!("..\\examples\\expr.it");
   // let module_ptr = unsafe {
@@ -161,18 +162,6 @@ pub fn proses() {
 
   if !module_ptr.is_null() {
     println!("Module is loaded, whats next?");
-  }
-
-  let bufferSize = 5000;
-
-  let sample_rate = 48000;
-  // let mut buffer = vec![0f32; bufferSize/1];
-  let interleaved_stereo: &mut Vec<c_float> = &mut vec![0f32; bufferSize/1];
-  // Try to read module
-  let count = interleaved_stereo.capacity() >> 1; // Buffer needs to be of at least size count*2
-		
-  unsafe {
-    openmpt_sys::openmpt_module_read_interleaved_float_stereo(module_ptr, sample_rate, count, interleaved_stereo.as_mut_ptr());
   }
 
   // println!("buffer is : {:#?}", interleaved_stereo);
@@ -230,16 +219,86 @@ pub fn proses() {
           interface_size
       )
   };
-  if result != 0 {
-      panic!("Failed to get interface");
-  }
+  // if result != 0 {
+  //     panic!("Failed to get interface");
+  // }
 
   println!("Hasil getInterface (1=success, 0=interface not found) : {}", result);
   println!("hasil out : {:?}", interface.stop_note);
   println!("interface size : {:?}", interface_size);
   println!("interface id : {:?}", interface_id_bind);
+  unsafe {
+    let status = interface.get_channel_mute_status.unwrap()(module_ptr, 0);
+    println!("channel 0 mute status : {:?}", status);
+    // let status_set = interface.set_channel_mute_status.unwrap()(module_ptr, 0, 1);
+    // let status_set = interface.set_channel_mute_status.unwrap()(module_ptr, 1, 1);
+    // let status_set = interface.set_channel_mute_status.unwrap()(module_ptr, 2, 1);
+    // let status_set = interface.set_channel_mute_status.unwrap()(module_ptr, 3, 1);
+    // println!("channel 0 mute setting success? : {:?}", status_set);
+    let status2 = interface.get_channel_mute_status.unwrap()(module_ptr, 0);
+    println!("channel 0 mute status2 : {:?}", status2);
+  }
 
+  let bufferSize = 48000 * 5;
+  let mut count = 1;
+  let sample_rate = 48000;
+  // let mut buffer = vec![0f32; bufferSize/1];
+  let buffer: &mut Vec<c_float> = &mut vec![0f32; bufferSize/1];
+  // Try to read module
+  let mut countbuf = buffer.capacity() >> 1; // Buffer needs to be of at least size count*2	
+  unsafe {
+    openmpt_sys::openmpt_module_read_interleaved_float_stereo(module_ptr, sample_rate, countbuf, buffer.as_mut_ptr());
+  }
 
+  // println!("buffer is : {:#?}", interleaved_stereo);
+
+  let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+  //  let sink = Sink::new(&device);
+  let sink = Sink::try_new(&stream_handle).unwrap();
+
+  let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+sink.append(source);
+let mut counter = 0.0;
+// println!("controls : {}", module.get_ctls());
+// module.ctl_set_play_tempo_factor(0.8);
+loop {
+  // println!("sink health {} - {}s", sink.len(), module.get_position_seconds());
+  // module.ctl_set_play_tempo_factor(1.0 + counter/10.0);
+  // module.ctl_set_play_pitch_factor(1.0 + counter/1000.0);
+  // module.ctl_set(key, val);
+  counter += 1.0;
+  loop {
+      if sink.len() < 2 && count != 0 {
+          let mut buffer = vec![0f32; bufferSize/1];
+          countbuf = buffer.capacity() >> 1; // Buffer needs to be of at least size count*2	
+          unsafe {
+            count = openmpt_sys::openmpt_module_read_interleaved_float_stereo(module_ptr, sample_rate, countbuf, buffer.as_mut_ptr()) << 1;
+          }
+          let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+          sink.append(source);
+      }
+      else {
+          break;
+      }
+  }
+  let mut buffer = vec![0f32; bufferSize/1];
+  let countbuf = buffer.capacity() >> 1; // Buffer needs to be of at least size count*2	
+  unsafe {
+    count = openmpt_sys::openmpt_module_read_interleaved_float_stereo(module_ptr, sample_rate, countbuf, buffer.as_mut_ptr()) << 1;
+  }
+  let source = rodio::buffer::SamplesBuffer::new(2, 48000, &buffer[..count]);
+  sink.append(source);
+  if count == 0 {
+      break;
+  }
+  
+  // let pos_sec = module.get_position_seconds();
+  //  sink.sleep_until_end();
+  //  std::thread::sleep(Duration::from_secs(1));
+  println!("sink {}", sink.len());
+  unsafe { let status_set = interface.set_channel_mute_status.unwrap()(module_ptr, counter as i32, 1); }
+  tokio::time::sleep(tokio::time::Duration::from_millis((bufferSize/(1*48)).try_into().unwrap())).await; 
+}
 
 //   Construct the extended interface structure
   let mut ext_interface_ptr: OpenMPTModuleExt = ptr::null_mut();

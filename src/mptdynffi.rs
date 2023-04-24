@@ -34,8 +34,8 @@ pub struct OpenMptModuleExtInterfaceInteractive {
   get_global_volume: Option<i32>,
   set_channel_volume: Option<i32>,
   get_channel_volume: Option<i32>,
-  set_channel_mute_status: Option<i32>,
-  get_channel_mute_status: Option<i32>,
+  set_channel_mute_status: Option<unsafe extern "C" fn(*mut openmpt_module, i32, i32) -> i32>,
+  get_channel_mute_status: Option<unsafe extern "C" fn(*mut openmpt_module, i32) -> i32>,
   set_instrument_mute_status: Option<i32>,
   get_instrument_mute_status: Option<i32>,
   play_note: Option<i32>,
@@ -181,7 +181,11 @@ pub fn initialize() {
 
         println!("interface_size : {}", interface_size);
         println!("interface_id : {:?}", interface_id_bind);
-
         println!("Hasil getInterface (1=success, 0=interface not found) : {}", result);
+        unsafe {
+            let fn_get_mute = interface.set_channel_mute_status.unwrap();
+            // fn_get_mute
+            println!("accessing interface... : {:?}", 22);
+        }
 
 }

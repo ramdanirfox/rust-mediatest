@@ -70,8 +70,8 @@ let sink = Sink::try_new(&stream_handle).unwrap();
 //  let mut buffer = vec![0f32; 96000*2]; // 1 sec, but because it interleaved stereo multiply by two
 
 // openmpt_ffi::process();
-// mptffi2::proses();
-mptdynffi::initialize();
+mptffi2::proses().await;
+// mptdynffi::initialize();
 // ATTEMPT 3
 let bufferSize = 5000;
 
