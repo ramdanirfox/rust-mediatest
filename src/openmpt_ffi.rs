@@ -12,7 +12,7 @@ extern "C" {
         size: c_int,
         logfunc: Option<extern "C" fn(msg: *const c_char, user: *mut c_void)>,
         user: *mut c_void,
-        cfg: *const openmpt_module_initial_ctl,
+        cfg: *const openmpt_module_initial_ctl, 
     ) -> *mut openmpt_module;
 
     fn openmpt_module_destroy(module: *mut openmpt_module);

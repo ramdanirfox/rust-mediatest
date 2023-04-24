@@ -17,6 +17,7 @@ bytemuck = "1.13.0"
 hound = "3.1.0"
 openmpt-sys = "0.1.0"
 libc = "0.2"
+libloading = "0.8"
 
 [dev-dependencies]
 

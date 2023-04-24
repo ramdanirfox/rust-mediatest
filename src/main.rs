@@ -2,7 +2,7 @@
 #![cfg_attr(test, allow(unused_must_use))]
 
 use libxm::{XMContext};
-use rust_research::liopenmpt_ext_interactive2;
+use rust_research::mptdynffi;
 use rust_research::mptffi2;
 // use rust_research::openmpt_ffi;
 use std::ffi::CStr;
@@ -70,7 +70,8 @@ let sink = Sink::try_new(&stream_handle).unwrap();
 //  let mut buffer = vec![0f32; 96000*2]; // 1 sec, but because it interleaved stereo multiply by two
 
 // openmpt_ffi::process();
-mptffi2::proses();
+// mptffi2::proses();
+mptdynffi::initialize();
 // ATTEMPT 3
 let bufferSize = 5000;
 
